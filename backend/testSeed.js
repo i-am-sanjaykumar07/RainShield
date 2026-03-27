@@ -4,7 +4,7 @@ require('dotenv').config();
 
 async function testSeed() {
   try {
-    await mongoose.connect('mongodb+srv://palisettysanjaykumar_db_user:StPcfumQIOvDAEtS@urs.h9jrkne.mongodb.net/demo');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/rainshield');
     
     // Clear users
     await User.deleteMany({});

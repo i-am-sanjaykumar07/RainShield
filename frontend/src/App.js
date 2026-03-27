@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import SplashScreen from './components/SplashScreen';
+import loadGoogleMapsAPI from './utils/loadGoogleMaps';
 
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -13,9 +14,16 @@ import { AuthProvider, useAuth } from './services/AuthContext';
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
+  const [mapsLoaded, setMapsLoaded] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 3000);
+    
+    // Load Google Maps API
+    loadGoogleMapsAPI()
+      .then(() => setMapsLoaded(true))
+      .catch((err) => console.error('Google Maps loading error:', err));
+    
     return () => clearTimeout(timer);
   }, []);
 
