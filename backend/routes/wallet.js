@@ -130,23 +130,30 @@ router.post('/withdraw', auth, async (req, res) => {
       return res.status(400).json({ message: 'Account number, IFSC code and account name are required' });
     }
 
+    // Deduct from wallet immediately (hold the funds)
     user.walletBalance -= amount;
     await user.save();
 
+    // Save as PENDING — merchant must manually process payout
     const transaction = await new Transaction({
       user: user._id,
       type: 'withdrawal',
       amount: -amount,
-      description: `Withdrawal via ${method}${method === 'UPI' ? ` to ${upiId}` : ''}`,
-      withdrawalDetails: { upiId, accountNumber, method }
+      description: `Withdrawal via ${method}${method === 'UPI' ? ` to ${upiId}` : ` to ${accountName}`}`,
+      status: 'pending',
+      withdrawalStatus: 'pending',
+      withdrawalDetails: { upiId, accountNumber, ifscCode, accountName, method }
     }).save();
 
     if (global.io) {
-      global.io.emit('newTransaction', {
+      // Notify merchant of new withdrawal request
+      global.io.emit('withdrawalRequest', {
         id: transaction._id,
-        type: transaction.type,
-        amount: transaction.amount,
         user: user.email,
+        amount,
+        method,
+        upiId,
+        accountNumber,
         createdAt: transaction.createdAt
       });
       global.io.emit('walletUpdate', {
@@ -157,8 +164,90 @@ router.post('/withdraw', auth, async (req, res) => {
 
     res.json({
       walletBalance: user.walletBalance,
-      message: `Withdrawal of ₹${amount} initiated successfully. Funds will be credited within 1-3 business days.`
+      withdrawalId: transaction._id,
+      message: `Withdrawal request of ₹${amount} submitted. Funds will be credited within 1–3 business days.`
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─── Merchant endpoints ───────────────────────────────────────────────────────
+
+// List all pending withdrawals (merchant view)
+router.get('/withdrawals/pending', auth, async (req, res) => {
+  try {
+    const pending = await Transaction.find({
+      type: 'withdrawal',
+      withdrawalStatus: { $in: ['pending', 'processing'] }
+    })
+      .populate('user', 'email phone')
+      .sort({ createdAt: -1 });
+
+    res.json(pending);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Mark a withdrawal as completed (merchant calls this after sending money)
+router.post('/withdrawals/:id/complete', auth, async (req, res) => {
+  try {
+    const { note } = req.body; // e.g. UTR number / transaction reference
+
+    const transaction = await Transaction.findById(req.params.id).populate('user', 'email');
+    if (!transaction || transaction.type !== 'withdrawal') {
+      return res.status(404).json({ message: 'Withdrawal not found' });
+    }
+
+    transaction.withdrawalStatus = 'completed';
+    transaction.status = 'completed';
+    if (note) transaction.withdrawalNote = note;
+    await transaction.save();
+
+    if (global.io) {
+      global.io.emit('withdrawalCompleted', {
+        id: transaction._id,
+        userId: transaction.user._id,
+        amount: Math.abs(transaction.amount),
+        note
+      });
+    }
+
+    res.json({ message: 'Withdrawal marked as completed', transaction });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Mark a withdrawal as rejected (merchant calls this if payout fails)
+router.post('/withdrawals/:id/reject', auth, async (req, res) => {
+  try {
+    const { note } = req.body;
+
+    const transaction = await Transaction.findById(req.params.id).populate('user');
+    if (!transaction || transaction.type !== 'withdrawal') {
+      return res.status(404).json({ message: 'Withdrawal not found' });
+    }
+
+    // Refund wallet balance back to user
+    const user = await User.findById(transaction.user._id);
+    user.walletBalance += Math.abs(transaction.amount);
+    await user.save();
+
+    transaction.withdrawalStatus = 'rejected';
+    transaction.status = 'failed';
+    if (note) transaction.withdrawalNote = note;
+    await transaction.save();
+
+    if (global.io) {
+      global.io.emit('walletUpdate', {
+        userId: user._id,
+        newBalance: user.walletBalance
+      });
+    }
+
+    res.json({ message: 'Withdrawal rejected, balance refunded to user', walletBalance: user.walletBalance });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

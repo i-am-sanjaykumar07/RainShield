@@ -13,19 +13,24 @@ import Profile from './pages/Profile';
 import { AuthProvider, useAuth } from './services/AuthContext';
 
 function App() {
-  const [showSplash, setShowSplash] = useState(true);
+  // Only show splash on the very first visit of the session
+  const [showSplash, setShowSplash] = useState(
+    () => !sessionStorage.getItem('splashShown')
+  );
   const [mapsLoaded, setMapsLoaded] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 3000);
-    
     // Load Google Maps API
     loadGoogleMapsAPI()
       .then(() => setMapsLoaded(true))
       .catch((err) => console.error('Google Maps loading error:', err));
-    
-    return () => clearTimeout(timer);
-  }, []);
+
+    if (showSplash) {
+      sessionStorage.setItem('splashShown', '1');
+      const timer = setTimeout(() => setShowSplash(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSplash]);
 
   if (showSplash) return <SplashScreen />;
 

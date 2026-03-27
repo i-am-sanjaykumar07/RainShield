@@ -6,12 +6,21 @@ const transactionSchema = new mongoose.Schema({
   withdrawalDetails: {
     upiId: { type: String },
     accountNumber: { type: String },
+    ifscCode: { type: String },
+    accountName: { type: String },
     method: { type: String }
   },
   amount: { type: Number, required: true },
   description: { type: String },
   paymentId: { type: String },
-  status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'completed' }
+  // For withdrawals: pending until merchant manually processes the payout
+  status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'completed' },
+  withdrawalStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'completed', 'rejected'],
+    default: null
+  },
+  withdrawalNote: { type: String } // merchant can add a note (e.g. UTR number)
 }, { timestamps: true });
 
 module.exports = mongoose.model('Transaction', transactionSchema);

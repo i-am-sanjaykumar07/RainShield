@@ -143,6 +143,27 @@ const Wallet = () => {
     return colors[type] || 'bg-surface-100 text-surface-600';
   };
 
+  const withdrawalStatusBadge = (tx) => {
+    if (tx.type !== 'withdrawal') return null;
+    const map = {
+      pending:    { label: 'Pending',    cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+      processing: { label: 'Processing', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+      completed:  { label: 'Paid Out',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+      rejected:   { label: 'Rejected',   cls: 'bg-red-50 text-red-700 border-red-200' },
+    };
+    const s = map[tx.withdrawalStatus];
+    if (!s) return null;
+    return (
+      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${s.cls}`}>
+        {s.label}
+      </span>
+    );
+  };
+
+  const pendingWithdrawals = transactions.filter(
+    tx => tx.type === 'withdrawal' && tx.withdrawalStatus === 'pending'
+  );
+
   const paymentMethods = [
     { method: 'UPI', desc: 'Pay using UPI ID' },
     { method: 'QR Code', desc: 'Scan QR to pay' },
@@ -159,6 +180,29 @@ const Wallet = () => {
           <h1 className="page-title">Wallet</h1>
           <p className="page-subtitle">Manage your funds</p>
         </div>
+
+        {/* Pending withdrawals banner */}
+        {pendingWithdrawals.length > 0 && (
+          <div className="card mb-4 border-amber-200 bg-amber-50 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <span className="text-amber-500 text-lg">⏳</span>
+              <div>
+                <p className="text-sm font-semibold text-amber-900">
+                  {pendingWithdrawals.length} Withdrawal{pendingWithdrawals.length > 1 ? 's' : ''} Pending
+                </p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  Your withdrawal request{pendingWithdrawals.length > 1 ? 's are' : ' is'} being processed.
+                  Funds will be sent to your {pendingWithdrawals[0]?.withdrawalDetails?.method || 'account'} within 1–3 business days.
+                </p>
+                {pendingWithdrawals.map(tx => (
+                  <p key={tx._id} className="text-xs text-amber-600 font-mono mt-1">
+                    ₹{Math.abs(tx.amount)} → {tx.withdrawalDetails?.upiId || tx.withdrawalDetails?.accountNumber || 'Account'}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Balance Card */}
         <div className="card mb-4">
@@ -312,12 +356,13 @@ const Wallet = () => {
                 className="btn-danger btn-full mt-1"
                 disabled={withdrawLoading}
               >
-                {withdrawLoading ? 'Processing...' : `Withdraw ₹${withdrawAmount || '0'}`}
+                {withdrawLoading ? 'Submitting...' : `Request Withdrawal of ₹${withdrawAmount || '0'}`}
               </button>
             </form>
 
             <p className="text-[11px] text-surface-400 mt-3 text-center">
-              Funds credited within 1–3 business days.
+              ℹ️ Only the rental fee goes to the merchant. Your unused wallet balance is fully withdrawable.
+              Payouts are processed manually within 1–3 business days.
             </p>
           </div>
         </div>
@@ -341,7 +386,10 @@ const Wallet = () => {
                       {txIcon(tx.type)}
                     </span>
                     <div>
-                      <p className="text-sm font-medium text-surface-800 capitalize">{tx.type}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-surface-800 capitalize">{tx.type}</p>
+                        {withdrawalStatusBadge(tx)}
+                      </div>
                       <p className="text-xs text-surface-400">
                         {new Date(tx.createdAt).toLocaleDateString('en-IN', {
                           day: 'numeric', month: 'short', year: 'numeric',
@@ -349,6 +397,9 @@ const Wallet = () => {
                       </p>
                       {tx.description && (
                         <p className="text-xs text-surface-400 mt-0.5">{tx.description}</p>
+                      )}
+                      {tx.withdrawalNote && (
+                        <p className="text-xs text-emerald-600 mt-0.5">Ref: {tx.withdrawalNote}</p>
                       )}
                     </div>
                   </div>
