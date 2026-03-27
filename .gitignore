@@ -9,6 +9,9 @@ package-lock.json
 .env.test.local
 .env.production.local
 
+# Deployment credentials (NEVER COMMIT!)
+DEPLOYMENT_CREDENTIALS.md
+
 # Logs
 logs
 *.log
