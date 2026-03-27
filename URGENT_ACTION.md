@@ -29,7 +29,7 @@ I've removed the hardcoded secrets from your code, but you need to **rotate the 
 4. Generate new password → Copy it
 5. Update `backend/.env`:
    ```
-   MONGODB_URI=mongodb+srv://username:NEW_PASSWORD@cluster.mongodb.net/demo?retryWrites=true&w=majority
+   MONGODB_URI=mongodb+srv://YOUR_USERNAME:YOUR_NEW_PASSWORD@YOUR_CLUSTER.mongodb.net/YOUR_DATABASE?retryWrites=true&w=majority
    ```
 
 ---

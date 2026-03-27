@@ -93,6 +93,9 @@ GitHub's secret scanning found exposed credentials. I've fixed the code, but you
      ```
      MONGODB_URI=mongodb+srv://username:NEW_PASSWORD@cluster.mongodb.net/demo?retryWrites=true&w=majority
      ```
+   - Replace `username` with your MongoDB username
+   - Replace `NEW_PASSWORD` with your new password
+   - Replace `cluster` with your cluster name
    - Update `DEPLOYMENT_CREDENTIALS.md` with new URI
    - If already deployed on Railway, update the environment variable there
 
