@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/AuthContext';
 
-const MERCHANT_EMAIL = 'palisettysanjaykumar@gmail.com';
+const MERCHANT_EMAILS = ['palisettysanjaykumar@gmail.com'];
 
 const navLinks = [
   { path: '/dashboard', label: 'Dashboard', icon: '⊞' },
@@ -17,7 +17,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isMerchant = user?.email === MERCHANT_EMAIL;
+  const isMerchant = MERCHANT_EMAILS.includes(user?.email);
 
   const handleLogout = () => {
     logout();

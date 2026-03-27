@@ -62,12 +62,12 @@ function ProtectedRoute({ children }) {
   return user ? children : <Navigate to="/login" />;
 }
 
-// Only the merchant (admin) email can access /admin
-const MERCHANT_EMAIL = 'palisettysanjaykumar@gmail.com';
+// Add as many admin emails as needed
+const MERCHANT_EMAILS = ['palisettysanjaykumar@gmail.com'];
 function MerchantRoute({ children }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" />;
-  if (user.email !== MERCHANT_EMAIL) return <Navigate to="/dashboard" />;
+  if (!MERCHANT_EMAILS.includes(user.email)) return <Navigate to="/dashboard" />;
   return children;
 }
 
