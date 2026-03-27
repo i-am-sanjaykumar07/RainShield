@@ -10,6 +10,7 @@ import UmbrellaSelection from './pages/UmbrellaSelection';
 import Wallet from './pages/Wallet';
 import RentalTracking from './pages/RentalTracking';
 import Profile from './pages/Profile';
+import Admin from './pages/Admin';
 import { AuthProvider, useAuth } from './services/AuthContext';
 
 function App() {
@@ -46,6 +47,7 @@ function App() {
               <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
               <Route path="/tracking" element={<ProtectedRoute><RentalTracking /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/admin" element={<MerchantRoute><Admin /></MerchantRoute>} />
               <Route path="/" element={<Navigate to="/login" />} />
             </Routes>
           </div>
@@ -58,6 +60,15 @@ function App() {
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
   return user ? children : <Navigate to="/login" />;
+}
+
+// Only the merchant (admin) email can access /admin
+const MERCHANT_EMAIL = 'palisettysanjaykumar@gmail.com';
+function MerchantRoute({ children }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" />;
+  if (user.email !== MERCHANT_EMAIL) return <Navigate to="/dashboard" />;
+  return children;
 }
 
 export default App;

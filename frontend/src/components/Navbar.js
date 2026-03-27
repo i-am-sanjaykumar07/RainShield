@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/AuthContext';
 
+const MERCHANT_EMAIL = 'palisettysanjaykumar@gmail.com';
+
 const navLinks = [
   { path: '/dashboard', label: 'Dashboard', icon: '⊞' },
   { path: '/umbrellas', label: 'Umbrellas', icon: '☂' },
@@ -15,6 +17,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const isMerchant = user?.email === MERCHANT_EMAIL;
 
   const handleLogout = () => {
     logout();
@@ -22,6 +25,7 @@ const Navbar = () => {
   };
 
   const isActive = (path) => location.pathname === path;
+
 
   return (
     <nav className="bg-white/80 backdrop-blur-md border-b border-surface-200 sticky top-0 z-50">
@@ -52,6 +56,18 @@ const Navbar = () => {
                 {link.label}
               </button>
             ))}
+            {isMerchant && (
+              <button
+                onClick={() => navigate('/admin')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  isActive('/admin')
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'text-amber-600 hover:bg-amber-50'
+                }`}
+              >
+                ⚙ Admin
+              </button>
+            )}
           </div>
 
           {/* Right section */}
@@ -98,6 +114,14 @@ const Navbar = () => {
                   {link.label}
                 </button>
               ))}
+              {isMerchant && (
+                <button
+                  onClick={() => { navigate('/admin'); setMobileOpen(false); }}
+                  className="px-3 py-2 rounded-lg text-sm font-medium text-left text-amber-700 hover:bg-amber-50 transition-all"
+                >
+                  <span className="mr-2">⚙</span>Admin Panel
+                </button>
+              )}
               <button
                 onClick={handleLogout}
                 className="px-3 py-2 rounded-lg text-sm font-medium text-red-600 text-left hover:bg-red-50 transition-all"
