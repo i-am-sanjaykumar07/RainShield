@@ -118,6 +118,7 @@ router.post('/:id/pay', auth, async (req, res) => {
     rental.paymentStatus = 'completed';
     rental.paymentId = paymentId;
     rental.unlocked = true;
+    rental.unlockedAt = new Date();   // timer starts from here
     rental.totalAmount = currentCost;
     await rental.save();
     
@@ -197,6 +198,7 @@ router.post('/pay-all', auth, async (req, res) => {
       rental.paymentStatus = 'completed';
       rental.paymentId = paymentId;
       rental.unlocked = true;
+      rental.unlockedAt = new Date();   // timer starts from here
       rental.totalAmount = cost;
       await rental.save();
       updatedRentals.push(rental);
@@ -456,6 +458,70 @@ router.get('/history', auth, async (req, res) => {
       .populate('umbrella')
       .sort({ createdAt: -1 });
     res.json(rentals);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Cancel a rental that hasn't been paid/unlocked yet
+router.post('/:id/cancel', auth, async (req, res) => {
+  try {
+    const rental = await Rental.findById(req.params.id).populate('umbrella');
+    if (!rental) return res.status(404).json({ message: 'Rental not found' });
+
+    // Only allow cancelling if it belongs to this user and is still locked (not paid)
+    if (String(rental.user) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Not authorised' });
+    }
+    if (rental.unlocked) {
+      return res.status(400).json({ message: 'Rental is already paid and unlocked — drop it off instead of cancelling.' });
+    }
+
+    // Free the umbrella
+    const umbrella = await Umbrella.findById(rental.umbrella._id);
+    if (umbrella) {
+      umbrella.isAvailable = true;
+      umbrella.currentRental = null;
+      await umbrella.save();
+      if (global.io) {
+        global.io.emit('umbrellaUpdate', { id: umbrella._id, isAvailable: true });
+      }
+    }
+
+    // Remove the rental record entirely
+    await Rental.findByIdAndDelete(rental._id);
+
+    // Check if the user has any remaining active rentals
+    const user = await User.findById(req.user._id);
+    const remainingActive = await Rental.countDocuments({ user: user._id, isActive: true });
+
+    let refundAmount = 0;
+    if (remainingActive === 0 && user.depositMade) {
+      // Last rental cancelled — refund the deposit
+      refundAmount = user.depositAmount || 100;
+      user.walletBalance += refundAmount;
+      user.depositAmount = 0;
+      user.depositMade = false;
+      await user.save();
+
+      await new Transaction({
+        user: user._id,
+        type: 'refund',
+        amount: refundAmount,
+        description: 'Deposit refund — rental cancelled before payment'
+      }).save();
+
+      if (global.io) {
+        global.io.emit('walletUpdate', { userId: user._id, newBalance: user.walletBalance });
+      }
+    }
+
+    res.json({
+      message: 'Rental cancelled successfully.',
+      refundAmount,
+      walletBalance: user.walletBalance,
+      remainingActive
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

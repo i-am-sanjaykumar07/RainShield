@@ -11,6 +11,7 @@ const rentalSchema = new mongoose.Schema({
   paymentId: { type: String },
   isActive: { type: Boolean, default: true },
   unlocked: { type: Boolean, default: false },
+  unlockedAt: { type: Date },   // set when payment is made — timer starts from here
   dropOffLocation: {
     address: String,
     latitude: Number,

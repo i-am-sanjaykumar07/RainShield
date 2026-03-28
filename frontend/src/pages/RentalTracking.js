@@ -70,9 +70,13 @@ const RentalTracking = () => {
     return () => clearInterval(timer);
   }, [fetchActiveRentals, fetchLocations]);
 
+  // Duration only ticks after payment (unlockedAt). Locked rentals show 0.
   const getDuration = () => {
-    if (!selectedRental) return { hours: 0, minutes: 0, seconds: 0 };
-    const diff = currentTime - new Date(selectedRental.startTime);
+    if (!selectedRental || !selectedRental.unlocked) return { hours: 0, minutes: 0, seconds: 0 };
+    const startFrom = selectedRental.unlockedAt
+      ? new Date(selectedRental.unlockedAt)
+      : new Date(selectedRental.startTime);
+    const diff = Math.max(0, currentTime - startFrom);
     return {
       hours: Math.floor(diff / 3600000),
       minutes: Math.floor((diff % 3600000) / 60000),
@@ -80,25 +84,42 @@ const RentalTracking = () => {
     };
   };
 
+  // Locked → show minimum ₹7; unlocked → show what was already paid
   const getCost = () => {
-    const { hours } = getDuration();
-    if (hours === 0) return 7;
-    return hours <= 7 ? (hours + 1) * 7 : Math.ceil((hours + 1) / 24) * 70;
+    if (!selectedRental?.unlocked) return 7;
+    return selectedRental.totalAmount || 7;
   };
 
   const executeSinglePayment = async () => {
     try {
+      const now = new Date().toISOString();
       const response = await api.post(`/rentals/${selectedRental._id}/pay`, {
         paymentId: `wallet_${Date.now()}`,
         paymentMethod: 'Wallet',
       });
-      setSelectedRental(prev => ({ ...prev, unlocked: true, paymentStatus: 'completed' }));
-      setActiveRentals(prev => prev.map(r => r._id === selectedRental._id ? { ...r, unlocked: true } : r));
+      setSelectedRental(prev => ({ ...prev, unlocked: true, paymentStatus: 'completed', unlockedAt: now, totalAmount: response.data.amountDeducted }));
+      setActiveRentals(prev => prev.map(r => r._id === selectedRental._id ? { ...r, unlocked: true, unlockedAt: now, totalAmount: response.data.amountDeducted } : r));
       updateUser({ walletBalance: response.data.walletBalance });
     } catch {
       alert('Wallet deduction failed. Please try again.');
     } finally {
       setPaymentLoading(false);
+    }
+  };
+
+  const handleCancelRental = async (rentalId) => {
+    if (!window.confirm('Cancel this rental? The umbrella will be released back to the pool.')) return;
+    try {
+      const response = await api.post(`/rentals/${rentalId}/cancel`);
+      const remaining = activeRentals.filter(r => r._id !== rentalId);
+      setActiveRentals(remaining);
+      setSelectedRental(remaining.length > 0 ? remaining[0] : null);
+      if (response.data.walletBalance !== undefined) {
+        updateUser({ walletBalance: response.data.walletBalance, depositMade: response.data.remainingActive > 0 });
+      }
+      if (remaining.length === 0) navigate('/dashboard');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to cancel rental.');
     }
   };
 
@@ -341,14 +362,14 @@ const RentalTracking = () => {
         <div className="card">
           <h3 className="section-title mb-4">Actions</h3>
           <div className="flex flex-wrap gap-3">
-            {/* Payment Actions */}
+            {/* Payment Actions — only for locked rentals */}
             {selectedRental && !selectedRental.unlocked && (
               <button 
                 onClick={() => handlePaymentWithWalletCheck(false)} 
                 disabled={paymentLoading}
                 className="btn-primary btn-lg"
               >
-                {paymentLoading ? 'Processing...' : `Pay Unlock Current (₹${cost})`}
+                {paymentLoading ? 'Processing...' : `Pay & Unlock Current (₹${cost})`}
               </button>
             )}
             {activeRentals.filter(r => !r.unlocked).length > 1 && (
@@ -361,7 +382,36 @@ const RentalTracking = () => {
               </button>
             )}
 
-            {/* Drop Off Actions */}
+            {/* Cancel Actions — only for locked (unpaid) rentals */}
+            {selectedRental && !selectedRental.unlocked && (
+              <button
+                onClick={() => handleCancelRental(selectedRental._id)}
+                className="btn-ghost btn-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600"
+              >
+                ✕ Cancel Current ({selectedRental.umbrella?.umbrellaId})
+              </button>
+            )}
+            {activeRentals.filter(r => !r.unlocked).length > 1 && (
+              <button
+                onClick={async () => {
+                  if (!window.confirm(`Cancel all ${activeRentals.filter(r => !r.unlocked).length} unpaid rentals? Umbrellas will be released.`)) return;
+                  for (const r of activeRentals.filter(x => !x.unlocked)) {
+                    try { await api.post(`/rentals/${r._id}/cancel`); } catch {}
+                  }
+                  const remaining = activeRentals.filter(r => r.unlocked);
+                  setActiveRentals(remaining);
+                  setSelectedRental(remaining.length > 0 ? remaining[0] : null);
+                  const freshUser = await api.get('/auth/profile');
+                  updateUser(freshUser.data.user);
+                  if (remaining.length === 0) navigate('/dashboard');
+                }}
+                className="btn-ghost btn-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600"
+              >
+                ✕ Cancel All Unpaid ({activeRentals.filter(r => !r.unlocked).length})
+              </button>
+            )}
+
+            {/* Drop Off Actions — only for paid/unlocked rentals */}
             {selectedRental?.unlocked && (
               <button
                 onClick={() => {
