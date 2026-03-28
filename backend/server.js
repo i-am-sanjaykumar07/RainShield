@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const compression = require('compression');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const { createServer } = require('http');
@@ -27,6 +28,7 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   credentials: true
 }));
+app.use(compression());
 app.use(express.json());
 
 mongoose.connect(process.env.MONGODB_URI).catch(err => {

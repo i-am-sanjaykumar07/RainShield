@@ -15,7 +15,7 @@ const SplashScreen = () => {
           }`}
       >
         {/* Icon */}
-        <img src="/umbrellalogo.png" alt="RainShield" className="w-24 h-24 rounded-2xl mb-8 shadow-elevated object-contain" />
+        <img src="/umbrellalogo.webp" alt="RainShield" className="w-24 h-24 rounded-2xl mb-8 shadow-elevated object-contain" />
 
         {/* Title */}
         <h1 className="text-4xl md:text-5xl font-bold text-surface-900 tracking-tight mb-3">

@@ -181,7 +181,8 @@ router.get('/withdrawals/pending', auth, async (req, res) => {
       withdrawalStatus: { $in: ['pending', 'processing'] }
     })
       .populate('user', 'email phone')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json(pending);
   } catch (error) {
@@ -257,7 +258,8 @@ router.get('/transactions', auth, async (req, res) => {
   try {
     const transactions = await Transaction.find({ user: req.user._id })
       .populate('user', 'email phone')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
     res.json(transactions);
   } catch (error) {
     res.status(500).json({ message: error.message });

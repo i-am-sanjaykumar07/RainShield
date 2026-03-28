@@ -412,7 +412,7 @@ router.get('/active', auth, async (req, res) => {
     const rentals = await Rental.find({ 
       user: req.user._id, 
       isActive: true 
-    }).populate('umbrella');
+    }).populate('umbrella').lean();
     res.json(rentals);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -424,7 +424,8 @@ router.get('/history', auth, async (req, res) => {
   try {
     const rentals = await Rental.find({ user: req.user._id })
       .populate('umbrella')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
     res.json(rentals);
   } catch (error) {
     res.status(500).json({ message: error.message });

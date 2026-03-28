@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
     const filter = { isActive: true };
     if (color) filter.color = color;
     
-    const umbrellas = await Umbrella.find(filter);
+    const umbrellas = await Umbrella.find(filter).lean();
     res.json(umbrellas);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
 // Get umbrella by ID
 router.get('/:id', async (req, res) => {
   try {
-    const umbrella = await Umbrella.findById(req.params.id);
+    const umbrella = await Umbrella.findById(req.params.id).lean();
     if (!umbrella) return res.status(404).json({ message: 'Umbrella not found' });
     res.json(umbrella);
   } catch (error) {
