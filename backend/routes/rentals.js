@@ -13,7 +13,9 @@ router.post('/start', auth, async (req, res) => {
     const { umbrellaId } = req.body;
     
     const user = await User.findById(req.user._id);
-    if (!user.depositMade) {
+    const isAdmin = ['palisettysanjaykumar@gmail.com', 'sanjay@cu.edu.in'].includes(user.email);
+    
+    if (!user.depositMade && !isAdmin) {
       return res.status(400).json({ message: 'Please make initial deposit first' });
     }
 
@@ -59,7 +61,9 @@ router.post('/start-multiple', auth, async (req, res) => {
     const { umbrellaIds } = req.body;
     
     const user = await User.findById(req.user._id);
-    if (!user.depositMade) {
+    const isAdmin = ['palisettysanjaykumar@gmail.com', 'sanjay@cu.edu.in'].includes(user.email);
+    
+    if (!user.depositMade && !isAdmin) {
       return res.status(400).json({ message: 'Please make initial deposit first' });
     }
 

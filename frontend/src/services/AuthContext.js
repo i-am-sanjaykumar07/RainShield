@@ -19,10 +19,19 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  const processUser = (userData) => {
+    // Admin users completely bypass the deposit requirement
+    const adminEmails = ['palisettysanjaykumar@gmail.com', 'sanjay@cu.edu.in'];
+    if (userData && adminEmails.includes(userData.email)) {
+      userData.depositMade = true;
+    }
+    return userData;
+  };
+
   const fetchProfile = async () => {
     try {
       const response = await api.get('/auth/profile');
-      setUser(response.data.user);
+      setUser(processUser(response.data.user));
     } catch (error) {
       localStorage.removeItem('token');
       delete api.defaults.headers.common['Authorization'];
@@ -39,9 +48,10 @@ export const AuthProvider = ({ children }) => {
       
       localStorage.setItem('token', token);
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
       
-      return user;
+      const processedUser = processUser(user);
+      setUser(processedUser);
+      return processedUser;
     } catch (error) {
       console.error('Login error:', error.response?.data || error.message);
       throw error;
@@ -54,9 +64,10 @@ export const AuthProvider = ({ children }) => {
     
     localStorage.setItem('token', token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    setUser(user);
     
-    return user;
+    const processedUser = processUser(user);
+    setUser(processedUser);
+    return processedUser;
   };
 
   const logout = () => {
@@ -66,7 +77,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUser = (userData) => {
-    setUser(prev => ({ ...prev, ...userData }));
+    setUser(prev => processUser({ ...prev, ...userData }));
   };
 
   const value = {
