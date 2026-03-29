@@ -1,17 +1,17 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import SplashScreen from './components/SplashScreen';
 import loadGoogleMapsAPI from './utils/loadGoogleMaps';
 import { AuthProvider, useAuth } from './services/AuthContext';
 
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import UmbrellaSelection from './pages/UmbrellaSelection';
-import Wallet from './pages/Wallet';
-import RentalTracking from './pages/RentalTracking';
-import Profile from './pages/Profile';
-import Admin from './pages/Admin';
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const UmbrellaSelection = lazy(() => import('./pages/UmbrellaSelection'));
+const Wallet = lazy(() => import('./pages/Wallet'));
+const RentalTracking = lazy(() => import('./pages/RentalTracking'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Admin = lazy(() => import('./pages/Admin'));
 
 function App() {
   useEffect(() => {
