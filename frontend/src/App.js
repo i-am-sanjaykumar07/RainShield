@@ -8,7 +8,6 @@ import { AuthProvider, useAuth } from './services/AuthContext';
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const UmbrellaSelection = lazy(() => import('./pages/UmbrellaSelection'));
-const Wallet = lazy(() => import('./pages/Wallet'));
 const RentalTracking = lazy(() => import('./pages/RentalTracking'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -30,7 +29,6 @@ function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/umbrellas" element={<ProtectedRoute><UmbrellaSelection /></ProtectedRoute>} />
-                <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
                 <Route path="/tracking" element={<ProtectedRoute><RentalTracking /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/admin" element={<MerchantRoute><Admin /></MerchantRoute>} />

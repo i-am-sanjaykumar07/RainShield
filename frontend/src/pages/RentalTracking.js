@@ -90,19 +90,68 @@ const RentalTracking = () => {
     return selectedRental.totalAmount || 7;
   };
 
-  const executeSinglePayment = async () => {
+  const handlePayment = async (isBulk) => {
+    if (paymentLoading) return;
+    setPaymentLoading(true);
+
     try {
-      const now = new Date().toISOString();
-      const response = await api.post(`/rentals/${selectedRental._id}/pay`, {
-        paymentId: `wallet_${Date.now()}`,
-        paymentMethod: 'Wallet',
+      const rentalIds = isBulk 
+        ? activeRentals.filter(r => !r.unlocked).map(r => r._id)
+        : [selectedRental._id];
+
+      // 1. Create order on backend
+      const { data: order } = await api.post('/rentals/create-payment-order', { rentalIds });
+      
+      const options = {
+        key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'rzp_live_SVlA2VxGM7X1gi',
+        amount: order.amount,
+        currency: "INR",
+        name: "RainShield",
+        description: `Direct Rental Payment (${rentalIds.length} umbrella${rentalIds.length > 1 ? 's' : ''})`,
+        order_id: order.orderId,
+        handler: async function (response) {
+          try {
+            // 2. Verify payment on backend
+            await api.post('/rentals/verify-payment', {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+              rentalIds
+            });
+            
+            // 3. Update local state
+            const now = new Date().toISOString();
+            setActiveRentals(prev => prev.map(r => 
+              rentalIds.includes(r._id) 
+                ? { ...r, unlocked: true, paymentStatus: 'completed', unlockedAt: now } 
+                : r
+            ));
+
+            if (selectedRental && rentalIds.includes(selectedRental._id)) {
+              setSelectedRental(prev => ({ ...prev, unlocked: true, paymentStatus: 'completed', unlockedAt: now }));
+            }
+
+            alert('Payment successful! Umbrellas unlocked.');
+          } catch (err) {
+            alert('Payment verification failed.');
+          } finally {
+            setPaymentLoading(false);
+          }
+        },
+        prefill: {
+          name: user?.name,
+          email: user?.email,
+        },
+        theme: { color: "#4f46e5" }
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function () {
+        alert("Payment Failed");
+        setPaymentLoading(false);
       });
-      setSelectedRental(prev => ({ ...prev, unlocked: true, paymentStatus: 'completed', unlockedAt: now, totalAmount: response.data.amountDeducted }));
-      setActiveRentals(prev => prev.map(r => r._id === selectedRental._id ? { ...r, unlocked: true, unlockedAt: now, totalAmount: response.data.amountDeducted } : r));
-      updateUser({ walletBalance: response.data.walletBalance });
-    } catch {
-      alert('Wallet deduction failed. Please try again.');
-    } finally {
+      rzp.open();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to initiate payment.');
       setPaymentLoading(false);
     }
   };
@@ -110,109 +159,13 @@ const RentalTracking = () => {
   const handleCancelRental = async (rentalId) => {
     if (!window.confirm('Cancel this rental? The umbrella will be released back to the pool.')) return;
     try {
-      const response = await api.post(`/rentals/${rentalId}/cancel`);
+      await api.post(`/rentals/${rentalId}/cancel`);
       const remaining = activeRentals.filter(r => r._id !== rentalId);
       setActiveRentals(remaining);
       setSelectedRental(remaining.length > 0 ? remaining[0] : null);
-      if (response.data.walletBalance !== undefined) {
-        updateUser({ walletBalance: response.data.walletBalance });
-      }
       if (remaining.length === 0) navigate('/dashboard');
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to cancel rental.');
-    }
-  };
-
-  const executeBulkPayment = async () => {
-    try {
-      const response = await api.post('/rentals/pay-all', {
-        paymentId: `wallet_${Date.now()}`,
-        paymentMethod: 'Wallet',
-      });
-      const updatedRentals = response.data.rentals;
-      setActiveRentals(prev => prev.map(r => {
-        const updated = updatedRentals.find(ur => ur._id === r._id);
-        return updated ? { ...r, unlocked: true, paymentStatus: 'completed' } : r;
-      }));
-      if (selectedRental && !selectedRental.unlocked) {
-        setSelectedRental(prev => ({ ...prev, unlocked: true, paymentStatus: 'completed' }));
-      }
-      updateUser({ walletBalance: response.data.walletBalance });
-    } catch (error) {
-      alert(error.response?.data?.message || 'Bulk payment failed.');
-    } finally {
-      setPaymentLoading(false);
-    }
-  };
-
-  const handlePaymentWithWalletCheck = async (isBulk) => {
-    if (paymentLoading) return;
-    setPaymentLoading(true);
-
-    try {
-      const cost = isBulk ? getTotalUnpaidCost() : getCost();
-      const currentBalance = user?.walletBalance || 0;
-      
-      if (currentBalance < cost) {
-        // Insufficient balance -> auto top-up via Razorpay
-        const deficit = cost - currentBalance;
-        const depositAmount = Math.max(deficit, 1); // Razorpay needs at least 1 INR
-        
-        const { data: order } = await api.post('/wallet/deposit', { amount: depositAmount });
-        
-        const options = {
-          key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'rzp_live_SVlA2VxGM7X1gi',
-          amount: order.amount,
-          currency: "INR",
-          name: "RainShield",
-          description: "Wallet Top-up for Umbrella",
-          order_id: order.orderId,
-          handler: async function (response) {
-            try {
-              const verifyResponse = await api.post('/wallet/verify-deposit', {
-                paymentId: response.razorpay_payment_id,
-                orderId: response.razorpay_order_id,
-                signature: response.razorpay_signature,
-                amount: depositAmount,
-                paymentMethod: 'Razorpay',
-              });
-              updateUser({ walletBalance: verifyResponse.data.walletBalance });
-              
-              // Now proceed with the actual rental payment
-              if (isBulk) {
-                await executeBulkPayment();
-              } else {
-                await executeSinglePayment();
-              }
-            } catch (err) {
-              alert('Top-up verification failed.');
-              setPaymentLoading(false);
-            }
-          },
-          prefill: {
-            name: user?.name,
-            email: user?.email,
-          },
-          theme: { color: "#4f46e5" }
-        };
-        const rzp = new window.Razorpay(options);
-        rzp.on('payment.failed', function () {
-          alert("Top-up Failed");
-          setPaymentLoading(false);
-        });
-        rzp.open();
-        return; // wait for handler to finish
-      } else {
-        // Sufficient balance, just pay
-        if (isBulk) {
-          await executeBulkPayment();
-        } else {
-          await executeSinglePayment();
-        }
-      }
-    } catch (err) {
-      alert('Failed to initiate payment.');
-      setPaymentLoading(false);
     }
   };
 
@@ -235,11 +188,7 @@ const RentalTracking = () => {
         });
       }
 
-      // Sync wallet balance & depositMade back to UI immediately
-      if (response?.data?.walletBalance !== undefined) {
-        updateUser({ walletBalance: response.data.walletBalance, depositMade: false });
-      }
-
+      // Sync back to UI immediately
       setShowDropOffModal(false);
       navigate('/dashboard');
     } catch {
@@ -372,7 +321,7 @@ const RentalTracking = () => {
             {/* Payment Actions — only for locked rentals */}
             {selectedRental && !selectedRental.unlocked && (
               <button 
-                onClick={() => handlePaymentWithWalletCheck(false)} 
+                onClick={() => handlePayment(false)} 
                 disabled={paymentLoading}
                 className="btn-primary btn-lg"
               >
@@ -381,7 +330,7 @@ const RentalTracking = () => {
             )}
             {activeRentals.filter(r => !r.unlocked).length > 1 && (
               <button 
-                onClick={() => handlePaymentWithWalletCheck(true)} 
+                onClick={() => handlePayment(true)} 
                 disabled={paymentLoading}
                 className="bg-purple-600 hover:bg-purple-700 text-white font-medium px-5 py-2.5 rounded-xl shadow-sm transition-all text-sm disabled:opacity-50"
               >

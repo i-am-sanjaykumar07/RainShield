@@ -8,7 +8,6 @@ const navLinks = [
   { path: '/dashboard', label: 'Dashboard', icon: '⊞' },
   { path: '/umbrellas', label: 'Umbrellas', icon: '☂' },
   { path: '/tracking', label: 'Tracking', icon: '◎' },
-  { path: '/wallet', label: 'Wallet', icon: '◈' },
   { path: '/profile', label: 'Profile', icon: '○' },
 ];
 
@@ -72,13 +71,6 @@ const Navbar = () => {
 
           {/* Right section */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/wallet')}
-              className="wallet-badge"
-            >
-              <span className="font-mono text-sm">₹{user?.walletBalance || 0}</span>
-            </button>
-
             <button
               onClick={handleLogout}
               className="hidden md:block text-sm text-surface-400 hover:text-surface-600 transition-colors"

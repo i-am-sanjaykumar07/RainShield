@@ -28,7 +28,7 @@ router.post('/register', async (req, res) => {
     }
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'secret');
-    res.status(201).json({ token, user: { id: user._id, email: user.email, phone: user.phone, walletBalance: user.walletBalance, depositMade: user.depositMade, cashbackReceived: user.cashbackReceived } });
+    res.status(201).json({ token, user: { id: user._id, email: user.email, phone: user.phone } });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -61,10 +61,7 @@ router.post('/login', async (req, res) => {
         id: user._id, 
         email: user.email, 
         phone: user.phone,
-        walletBalance: user.walletBalance,
         rentalHistory: user.rentalHistory,
-        depositMade: user.depositMade,
-        cashbackReceived: user.cashbackReceived,
         createdAt: user.createdAt
       } 
     });
@@ -73,30 +70,15 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Get Profile
 router.get('/profile', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).populate('rentalHistory');
-    
-    // Auto-approve and credit admins for seamless testing
-    const adminEmails = (process.env.ADMIN_EMAILS || 'palisettysanjaykumar@gmail.com,sanjay@cu.edu.in').split(',');
-    if (adminEmails.includes(user.email)) {
-      if (!user.depositMade) {
-        user.depositMade = true;
-        user.walletBalance = (user.walletBalance || 0) + 400; // Provide starting funds
-        await user.save();
-      }
-    }
-
     res.json({ 
       user: { 
         id: user._id, 
         email: user.email, 
         phone: user.phone,
-        walletBalance: user.walletBalance,
         rentalHistory: user.rentalHistory,
-        depositMade: user.depositMade,
-        cashbackReceived: user.cashbackReceived,
         googleId: user.googleId,
         createdAt: user.createdAt
       } 
@@ -135,9 +117,6 @@ router.put('/profile', auth, async (req, res) => {
         id: user._id, 
         email: user.email, 
         phone: user.phone,
-        walletBalance: user.walletBalance,
-        depositMade: user.depositMade,
-        cashbackReceived: user.cashbackReceived,
         createdAt: user.createdAt
       } 
     });
@@ -179,10 +158,7 @@ router.post('/google', async (req, res) => {
     if (!user) {
       user = new User({
         email,
-        googleId,
-        walletBalance: 0,
-        depositMade: false,
-        cashbackReceived: false
+        googleId
       });
       await user.save();
       
@@ -200,10 +176,7 @@ router.post('/google', async (req, res) => {
       token,
       user: {
         id: user._id,
-        email: user.email,
-        walletBalance: user.walletBalance,
-        depositMade: user.depositMade,
-        cashbackReceived: user.cashbackReceived
+        email: user.email
       }
     });
   } catch (error) {
@@ -221,10 +194,7 @@ router.post('/google-mock', async (req, res) => {
     if (!user) {
       user = new User({
         email,
-        googleId: 'mock_google_id',
-        walletBalance: 0,
-        depositMade: false,
-        cashbackReceived: false
+        googleId: 'mock_google_id'
       });
       await user.save();
       
@@ -244,10 +214,7 @@ router.post('/google-mock', async (req, res) => {
       token,
       user: {
         id: user._id,
-        email: user.email,
-        walletBalance: user.walletBalance,
-        depositMade: user.depositMade,
-        cashbackReceived: user.cashbackReceived
+        email: user.email
       }
     });
   } catch (error) {

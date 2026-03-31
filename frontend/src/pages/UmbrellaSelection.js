@@ -95,7 +95,7 @@ const UmbrellaSelection = () => {
 
   const handleRent = async () => {
     if (selectedUmbrellas.length === 0) return;
-    if (!user?.depositMade) { navigate('/wallet'); return; }
+    // Removal: if (!user?.depositMade) { navigate('/wallet'); return; }
     try {
       await api.post('/rentals/start-multiple', { umbrellaIds: selectedUmbrellas });
       navigate('/tracking');
@@ -105,7 +105,7 @@ const UmbrellaSelection = () => {
   };
 
   const clearSelection = () => setSelectedUmbrellas([]);
-  const needsDeposit = !user?.depositMade;
+  // Removal: const needsDeposit = !user?.depositMade;
 
   const totalSelected = selectedUmbrellas.length;
 
@@ -151,18 +151,7 @@ const UmbrellaSelection = () => {
           </div>
         </div>
 
-        {/* Deposit Warning */}
-        {needsDeposit && (
-          <div className="card mb-6 border-amber-200 bg-amber-50">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-amber-900">Deposit Required</p>
-                <p className="text-sm text-amber-700 mt-0.5">Add ₹300 to start renting umbrellas.</p>
-              </div>
-              <button onClick={() => navigate('/wallet')} className="btn-primary whitespace-nowrap">Make Deposit</button>
-            </div>
-          </div>
-        )}
+        {/* Removal: needsDeposit banner */}
 
         {/* Selection Bar */}
         {totalSelected > 0 && (
@@ -308,7 +297,7 @@ const UmbrellaSelection = () => {
                                   {/* Minus button */}
                                   <button
                                     onClick={() => removeFromCell(locationName, c.key)}
-                                    disabled={needsDeposit || selected === 0}
+                                    disabled={selected === 0}
                                     className="w-7 h-7 flex items-center justify-center text-surface-400 hover:text-red-500 hover:bg-red-50 
                                                rounded-l-lg transition-colors disabled:opacity-30 disabled:hover:text-surface-400 disabled:hover:bg-transparent"
                                     title="Remove one"
@@ -333,7 +322,7 @@ const UmbrellaSelection = () => {
                                   {/* Plus button */}
                                   <button
                                     onClick={() => addFromCell(locationName, c.key, 1)}
-                                    disabled={needsDeposit || !canAdd}
+                                    disabled={!canAdd}
                                     className="w-7 h-7 flex items-center justify-center text-surface-400 hover:text-brand-600 hover:bg-brand-50 
                                                rounded-r-lg transition-colors disabled:opacity-30 disabled:hover:text-surface-400 disabled:hover:bg-transparent"
                                     title="Add one"

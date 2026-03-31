@@ -4,8 +4,15 @@ const Umbrella = require('../models/Umbrella');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const auth = require('../middleware/auth');
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
 
 const router = express.Router();
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'test_key',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'test_secret'
+});
 
 // Start rental
 router.post('/start', auth, async (req, res) => {
@@ -13,12 +20,6 @@ router.post('/start', auth, async (req, res) => {
     const { umbrellaId } = req.body;
     
     const user = await User.findById(req.user._id);
-    const adminEmails = (process.env.ADMIN_EMAILS || 'palisettysanjaykumar@gmail.com,sanjay@cu.edu.in').split(',');
-    const isAdmin = adminEmails.includes(user.email);
-    
-    if (!user.depositMade && !isAdmin) {
-      return res.status(400).json({ message: 'Please make initial deposit first' });
-    }
 
     // Atomic lock to prevent race conditions
     const umbrella = await Umbrella.findOneAndUpdate(
@@ -67,12 +68,6 @@ router.post('/start-multiple', auth, async (req, res) => {
     const { umbrellaIds } = req.body;
     
     const user = await User.findById(req.user._id);
-    const adminEmails = (process.env.ADMIN_EMAILS || 'palisettysanjaykumar@gmail.com,sanjay@cu.edu.in').split(',');
-    const isAdmin = adminEmails.includes(user.email);
-    
-    if (!user.depositMade && !isAdmin) {
-      return res.status(400).json({ message: 'Please make initial deposit first' });
-    }
 
     const lockedUmbrellas = [];
     try {
@@ -115,139 +110,92 @@ router.post('/start-multiple', auth, async (req, res) => {
   }
 });
 
-// Process payment and unlock
-router.post('/:id/pay', auth, async (req, res) => {
+// Create Razorpay order for rental(s)
+router.post('/create-payment-order', auth, async (req, res) => {
   try {
-    const { paymentId, paymentMethod } = req.body;
-    const rental = await Rental.findById(req.params.id).populate('umbrella user');
-    
-    if (!rental) return res.status(404).json({ message: 'Rental not found' });
-    
-    // Calculate current cost
-    const hours = Math.ceil((new Date() - rental.startTime) / (1000 * 60 * 60));
-    const currentCost = hours <= 7 ? (hours || 1) * 7 : Math.ceil(hours / 24) * 70;
-    
-    // Check wallet balance
-    const user = await User.findById(rental.user._id);
-    if (user.walletBalance < currentCost) {
-      return res.status(400).json({ message: 'Insufficient wallet balance' });
-    }
-    
-    // Deduct from wallet
-    user.walletBalance -= currentCost;
-    await user.save();
-    
-    // Update rental
-    rental.paymentStatus = 'completed';
-    rental.paymentId = paymentId;
-    rental.unlocked = true;
-    rental.unlockedAt = new Date();   // timer starts from here
-    rental.totalAmount = currentCost;
-    await rental.save();
-    
-    // Record transaction
-    const transaction = await new Transaction({
-      user: user._id,
-      type: 'rental',
-      amount: -currentCost,
-      description: `Rental payment for ${rental.umbrella.umbrellaId} via ${paymentMethod || 'Card'}`
-    }).save();
-    
-    // Emit real-time updates
-    if (global.io) {
-      global.io.emit('newTransaction', {
-        id: transaction._id,
-        type: transaction.type,
-        amount: transaction.amount,
-        user: user.email,
-        createdAt: transaction.createdAt
-      });
-      global.io.emit('walletUpdate', {
-        userId: user._id,
-        newBalance: user.walletBalance
-      });
+    const { rentalIds } = req.body;
+    if (!rentalIds || !Array.isArray(rentalIds) || rentalIds.length === 0) {
+      return res.status(400).json({ message: 'No rentals provided' });
     }
 
-    res.json({ 
-      message: 'Payment successful, umbrella unlocked', 
-      rental,
-      walletBalance: user.walletBalance,
-      amountDeducted: currentCost
+    const rentals = await Rental.find({
+      _id: { $in: rentalIds },
+      user: req.user._id,
+      unlocked: false
     });
+
+    if (rentals.length === 0) {
+      return res.status(404).json({ message: 'No unpaid rentals found' });
+    }
+
+    let totalCost = 0;
+    rentals.forEach(rental => {
+      const hours = Math.ceil((new Date() - rental.startTime) / (1000 * 60 * 60));
+      const cost = hours <= 7 ? (hours || 1) * 7 : Math.ceil(hours / 24) * 70;
+      totalCost += cost;
+    });
+
+    const order = await razorpay.orders.create({
+      amount: totalCost * 100, // Convert to paise
+      currency: 'INR',
+      receipt: `rent_${req.user._id.toString().slice(-8)}_${Date.now().toString(36)}`
+    });
+
+    res.json({ orderId: order.id, amount: order.amount, totalCost });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// Pay for all active rentals
-router.post('/pay-all', auth, async (req, res) => {
+// Verify direct Razorpay payment and unlock
+router.post('/verify-payment', auth, async (req, res) => {
   try {
-    const { paymentId, paymentMethod } = req.body;
-    
-    const activeRentals = await Rental.find({ 
-      user: req.user._id, 
-      isActive: true,
+    const { razorpay_payment_id, razorpay_order_id, razorpay_signature, rentalIds } = req.body;
+
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSign = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || 'test_secret')
+      .update(sign.toString())
+      .digest("hex");
+
+    if (razorpay_signature !== expectedSign) {
+      return res.status(400).json({ message: "Invalid payment signature" });
+    }
+
+    const rentals = await Rental.find({
+      _id: { $in: rentalIds },
+      user: req.user._id,
       unlocked: false
     }).populate('umbrella');
-    
-    if (activeRentals.length === 0) {
-      return res.status(404).json({ message: 'No unpaid rentals found' });
+
+    if (rentals.length === 0) {
+      return res.status(404).json({ message: 'Rentals not found or already unlocked' });
     }
-    
-    // Calculate total cost for all rentals
-    let totalCost = 0;
-    const rentalCosts = [];
-    
-    activeRentals.forEach(rental => {
+
+    const user = await User.findById(req.user._id);
+
+    for (const rental of rentals) {
       const hours = Math.ceil((new Date() - rental.startTime) / (1000 * 60 * 60));
       const cost = hours <= 7 ? (hours || 1) * 7 : Math.ceil(hours / 24) * 70;
-      totalCost += cost;
-      rentalCosts.push({ rental, cost });
-    });
-    
-    // Check wallet balance
-    const user = await User.findById(req.user._id);
-    if (user.walletBalance < totalCost) {
-      return res.status(400).json({ message: 'Insufficient wallet balance' });
-    }
-    
-    // Deduct from wallet
-    user.walletBalance -= totalCost;
-    await user.save();
-    
-    // Update all rentals
-    const updatedRentals = [];
-    for (const { rental, cost } of rentalCosts) {
+
       rental.paymentStatus = 'completed';
-      rental.paymentId = paymentId;
+      rental.paymentId = razorpay_payment_id;
       rental.unlocked = true;
-      rental.unlockedAt = new Date();   // timer starts from here
+      rental.unlockedAt = new Date();
       rental.totalAmount = cost;
       await rental.save();
-      updatedRentals.push(rental);
-      
-      // Record detailed individual transactions
-      const hours = Math.ceil((new Date() - rental.startTime) / (1000 * 60 * 60));
+
       await new Transaction({
         user: user._id,
         type: 'rental',
         amount: -cost,
-        description: `Rental payment for ${rental.umbrella.umbrellaId} via ${paymentMethod || 'Card'}`,
-        umbrella: rental.umbrella._id,
-        rental: rental._id,
-        duration: hours,
-        rentalStartTime: rental.startTime,
-        rentalEndTime: new Date()
+        description: `Direct payment for ${rental.umbrella.umbrellaId} via Razorpay`,
+        paymentId: razorpay_payment_id,
+        status: 'completed'
       }).save();
     }
 
-    res.json({ 
-      message: `Payment successful, ${activeRentals.length} umbrellas unlocked`, 
-      rentals: updatedRentals,
-      walletBalance: user.walletBalance,
-      amountDeducted: totalCost,
-      count: activeRentals.length
-    });
+    res.json({ message: 'Payment verified and rentals unlocked', count: rentals.length });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -330,8 +278,7 @@ router.post('/end-multiple', auth, async (req, res) => {
 
     res.json({ 
       message: `Successfully dropped off ${updatedRentals.length} umbrellas`,
-      rentals: updatedRentals,
-      walletBalance: user.walletBalance
+      rentals: updatedRentals
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -392,7 +339,6 @@ router.post('/:id/end', auth, async (req, res) => {
 
     res.json({
       rental,
-      walletBalance: user.walletBalance,
       invoice: {
         umbrellaId: rental.umbrella.umbrellaId,
         duration: rental.duration,
@@ -466,7 +412,6 @@ router.post('/:id/cancel', auth, async (req, res) => {
 
     res.json({
       message: 'Rental cancelled successfully.',
-      walletBalance: user.walletBalance,
       remainingActive
     });
   } catch (error) {

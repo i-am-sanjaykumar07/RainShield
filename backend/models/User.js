@@ -6,10 +6,6 @@ const userSchema = new mongoose.Schema({
   phone: { type: String },
   googleId: { type: String },
   password: { type: String },
-  walletBalance: { type: Number, default: 0 },
-  depositMade: { type: Boolean, default: false },
-  depositAmount: { type: Number, default: 0 }, // refundable deposit currently held
-  cashbackReceived: { type: Boolean, default: false },
   rentalHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Rental' }]
 }, { timestamps: true });
 

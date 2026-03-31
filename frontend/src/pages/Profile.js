@@ -194,29 +194,6 @@ const Profile = () => {
 
           {/* Sidebar */}
           <div className="space-y-4">
-            {/* Wallet */}
-            <div className="card">
-              <p className="section-label mb-2">Wallet Balance</p>
-              <p className="stat-value text-surface-900 mb-3">₹{user?.walletBalance || 0}</p>
-              <div className="space-y-2 mb-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-surface-500">Deposit</span>
-                  <span className={user?.depositMade ? 'text-emerald-600 font-medium' : 'text-surface-400'}>
-                    {user?.depositMade ? 'Done' : 'Pending'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-surface-500">Cashback</span>
-                  <span className={user?.cashbackReceived ? 'text-emerald-600 font-medium' : 'text-surface-400'}>
-                    {user?.cashbackReceived ? 'Received' : 'Pending'}
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => navigate('/wallet')} className="btn-secondary btn-full text-sm">
-                Manage Wallet
-              </button>
-            </div>
-
             {/* Activity */}
             <div className="card">
               <p className="section-label mb-2">Total Rentals</p>
