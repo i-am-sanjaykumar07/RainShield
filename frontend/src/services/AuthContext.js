@@ -1,6 +1,7 @@
 // import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from './api';
 import SplashScreen from '../components/SplashScreen';
+import { createContext } from "react";
 
 const AuthContext = createContext();
 
